@@ -106,6 +106,7 @@ class NNUNet(nn.Module):
         # STEP 3 — YOUR CODE HERE. The paper adds a segmentation head at
         # intermediate decoder resolutions to help train deeper layers
         # (pp. 16–17). Add a head for the half-size decoder output here.
+        self.aux_head = nn.Conv3d(channels[1], 4, kernel_size=1) if self.depth >= 2 else None
 
     def forward(self, x: torch.Tensor, return_aux: bool = False) -> torch.Tensor:
         # STEP 2 — YOUR CODE HERE. Follow the journey through BasicUNet:
@@ -132,7 +133,8 @@ class NNUNet(nn.Module):
             if x.shape[2:] != skip.shape[2:]:  # only matters for odd patch sizes
                 x = F.interpolate(x, size=skip.shape[2:], mode="trilinear", align_corners=False)
             x = dec(torch.cat([x, skip], dim=1))
-            if i == self.depth - 2:  # decoder output at half the full resolution
+            if return_aux and self.training and i == self.depth - 2 and self.aux_head is not None:
+                # This decoder output has channels[1] channels at half resolution.
                 aux = self.aux_head(x)
 
 
@@ -141,5 +143,4 @@ class NNUNet(nn.Module):
             return out, aux
         return out
         
-        raise NotImplementedError("Complete the NNUNet forward pass in step 2")
-1
+
