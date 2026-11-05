@@ -55,7 +55,7 @@ class NNUNetBlock(nn.Module):
         super().__init__()
         # STEP 2 — YOUR CODE HERE. The paper uses two convolution blocks at
         # each resolution. Each has a 3 × 3 × 3 convolution, instance
-        # normalization, and a leaky ReLU with a negative slope of 0.01.
+        # normalization, and a leaky  with a negative slope of 0.01.
         # The first convolution changes in_channels to out_channels. Use
         # stride for this convolution so it can halve the image size when
         # the encoder moves to a deeper level. The second keeps the same
@@ -64,7 +64,7 @@ class NNUNetBlock(nn.Module):
             # First convolution block
             nn.Conv3d(in_channels, out_channels, kernel_size=3, stride=stride, padding=1), # kernel_size=3 equals 3x3x3
             nn.InstanceNorm3d(out_channels, affine=True),
-            nn.LeakyReLu(0.01, inplace=True),
+            nn.LeakyReLU(0.01, inplace=True),
 
             # Second convolution block
             nn.Conv3d(out_channels, out_channels, kernel_size=3, stride=1, padding=1, bias=False),
@@ -119,10 +119,11 @@ class NNUNet(nn.Module):
         # STEP 3: later, use the half-size decoder features for a second
         # prediction during training. A normal call should still return
         # only the full-size prediction for sliding-window inference.
-        
+            
         feats = []
         for block in self.encoder: # Encoder loop 
-            feats.append(block(x)) 
+            x = block(x)
+            feats.append(x) 
         
         x = feats.pop() # Removes and returns the last item (the bottleneck)
         skips = feats[::-1] # Reverses the list to enable decoding
