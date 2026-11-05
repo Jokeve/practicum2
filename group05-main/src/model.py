@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import torch
 from torch import nn
 from torch.nn import functional as F
@@ -9,6 +10,7 @@ from torch.nn import functional as F
 
 MODEL_CONFIG = {"model": "basic_unet", "model_levels": 3, "convolutions_per_stage": 1, "model_normalization": "none"}
 NNUNET_MODEL_CONFIG = {"model": "nnunet_template", "convolutions_per_stage": 2, "model_normalization": "instance"}
+
 
 
 class ConvBlock(nn.Module):
@@ -59,7 +61,15 @@ class NNUNetBlock(nn.Module):
         # the encoder moves to a deeper level. The second keeps the same
         # number of channels and the same image size. See pp. 16 and 24.
         self.layers = nn.Sequential(
-            # Add the layers described above.
+            # First convolution block
+            nn.Conv3d(in_channels, out_channels, kernel_size=3, stride=stride, padding=1), # kernel_size=3 equals 3x3x3
+            nn.InstanceNorm3d(out_channels, affine=True),
+            nn.LeakyReLu(0.01, inplace=True),
+
+            # Second convolution block
+            nn.Conv3d(out_channels, out_channels, kernel_size=3, stride=1, padding=1, bias=False),
+            nn.InstanceNorm3d(out_channels, affine=True),
+            nn.LeakyReLU(0.01, inplace=True),
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -77,7 +87,7 @@ class NNUNet(nn.Module):
         # network deeper until another downsampling would leave fewer than
         # four voxels along an axis. Work out the number of halvings that
         # this patch allows, and use it instead of the fixed value below.
-        self.depth = 2  # placeholder: a 64 × 64 × 64 patch allows 4 steps
+        self.depth = int(math.floor(math.log2(min(patch_size) / 4)))
 
         channels = [min(base_channels * 2**level, 320) for level in range(self.depth + 1)]
         # Like BasicUNet, there is an encoder, decoder, and final class head.
@@ -108,4 +118,28 @@ class NNUNet(nn.Module):
         # STEP 3: later, use the half-size decoder features for a second
         # prediction during training. A normal call should still return
         # only the full-size prediction for sliding-window inference.
+        
+        feats = []
+        for block in self.encoder: # Encoder loop 
+            feats.append(block(x)) 
+        
+        x = feats.pop() # Removes and returns the last item (the bottleneck)
+        skips = feats[::-1] # Reverses the list to enable decoding
+   
+        aux = None
+        for i, (up, dec, skip) in enumerate(zip(self.up, self.decoder, skips)): # Decoder loop
+            x = up(x)
+            if x.shape[2:] != skip.shape[2:]:  # only matters for odd patch sizes
+                x = F.interpolate(x, size=skip.shape[2:], mode="trilinear", align_corners=False)
+            x = dec(torch.cat([x, skip], dim=1))
+            if i == self.depth - 2:  # decoder output at half the full resolution
+                aux = self.aux_head(x)
+
+
+        out = self.head(x) # Final product
+        if return_aux and self.training and aux is not None:
+            return out, aux
+        return out
+        
         raise NotImplementedError("Complete the NNUNet forward pass in step 2")
+1
