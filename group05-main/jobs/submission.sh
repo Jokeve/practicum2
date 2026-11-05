@@ -35,8 +35,10 @@ source "$VENV_ROOT/bin/activate"
 python main.py \
   --data-root "$DATA_ROOT" \
   --wandb-project "$WANDB_PROJECT" \
+  --wandb-entity "${WANDB_ENTITY:-alex-termont-universiteit-gent}" \
   --run-name "${RUN_NAME:-00-baseline}" \
   --model "${MODEL:-basic}" \
+  --augmentation "${AUGMENTATION:-basic}" \
   --loss "${LOSS:-baseline}" \
   --optimizer "${OPTIMIZER:-adam}" \
   --epochs "${EPOCHS:-50}" \
