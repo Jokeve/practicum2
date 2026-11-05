@@ -19,7 +19,7 @@ from monai.inferers import sliding_window_inference
 from monai.data import CacheDataset, DataLoader
 
 from src.data_loader import (
-    DATA_CONFIG, CLASS_NAMES, advanced_train_transforms, val_transforms,
+    DATA_CONFIG, CLASS_NAMES, basic_train_transforms, advanced_train_transforms, val_transforms,
 )
 from src.evaluation import evaluate, overlay_for_case
 from src.loss import LOSS_CONFIG, NNUNET_LOSS_CONFIG, nnunet_loss, segmentation_loss
@@ -111,11 +111,25 @@ def run_training(args: argparse.Namespace) -> None:
         cases = cases[:args.max_cases]
     train_cases, val_cases = split_cases(cases)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    if args.augmentation == "advanced":
+        train_transform = advanced_train_transforms(args.patch_size, args.patches_per_case)
+    else:
+        train_transform = basic_train_transforms(args.patch_size, args.patches_per_case)
+
     train_set = CacheDataset(
         data=train_cases,
-        transform=advanced_train_transforms(args.patch_size, args.patches_per_case),
-        cache_num=1, num_workers=0, progress=False,
+        transform=train_transform,
+        cache_num=1,
+        num_workers=0,
+        progress=False,
     )
+    
+    # train_set = CacheDataset(
+    #     data=train_cases,
+    #     transform=advanced_train_transforms(args.patch_size, args.patches_per_case),
+    #     cache_num=1, num_workers=0, progress=False,
+    # )
     val_set = CacheDataset(
         data=val_cases, transform=val_transforms(),
         cache_num=1, num_workers=0, progress=False,
@@ -155,6 +169,7 @@ def run_training(args: argparse.Namespace) -> None:
         "validation_fraction": VALIDATION_FRACTION,
         "validation_split_seed": VALIDATION_SPLIT_SEED,
     })
+    config["data_augmentations"] = (DATA_CONFIG["data_augmentations"] if args.augmentation == "advanced" else "none")
     with wandb.init(
         project=args.wandb_project, entity=args.wandb_entity, group=args.wandb_group,
         name=args.run_name, mode=args.wandb_mode, config=config,
@@ -285,6 +300,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--run-name", default="baseline")
     parser.add_argument("--wandb-mode", choices=("online", "offline"), default="online")
     parser.add_argument("--smoke-test", action="store_true")
+    parser.add_argument("--augmentation", choices=("basic", "advanced"), default="basic")
     args = parser.parse_args()
     if not args.smoke_test and args.data_root is None:
         parser.error("--data-root is required unless --smoke-test is set")
