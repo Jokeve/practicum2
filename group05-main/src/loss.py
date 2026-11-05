@@ -28,4 +28,8 @@ def nnunet_loss(outputs: tuple[torch.Tensor, torch.Tensor], target: torch.Tensor
     
     criterion = DiceCELoss(to_onehot_y=True, softmax=True, lambda_dice=0.5, lambda_ce=0.5)
     half_target = F.interpolate(target.float(), size=half_logits.shape[2:], mode="nearest").long()
-    
+
+    full_loss = criterion(full_logits, target)
+    half_loss = criterion(half_logits, half_target)
+
+    return (full_loss + 0.5 * half_loss) / 1.5
