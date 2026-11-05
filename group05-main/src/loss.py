@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import torch
 from torch.nn import functional as F
+from monai.losses import DiceCELoss
+
 
 
 LOSS_CONFIG = {"loss": "cross_entropy"}
@@ -21,4 +23,9 @@ def nnunet_loss(outputs: tuple[torch.Tensor, torch.Tensor], target: torch.Tensor
     # full-resolution prediction with the original label, then compare the
     # half-resolution prediction with a nearest-neighbor resized label.
     # Give the full-resolution loss twice the weight of the other loss.
-    raise NotImplementedError("Implement nnunet_loss in step 3")
+
+    full_logits, half_logits = outputs
+    
+    criterion = DiceCELoss(to_onehot_y=True, softmax=True, lambda_dice=0.5, lambda_ce=0.5)
+    half_target = F.interpolate(target.float(), size=half_logits.shape[2:], mode="nearest").long()
+    
